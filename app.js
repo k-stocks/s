@@ -1,6 +1,6 @@
 const API='https://m.stock.naver.com';
 const DESKTOP='https://stock.naver.com';
-const PROXY_BASE='https://kstocks.hundprint.workers.dev';
+const PROXY_BASE='https://stock-insight-proxy.mcraft-tiger-574.workers.dev';
 const seed=[{name:'삼성전자',code:'005930'},{name:'삼성전자우',code:'005935'},{name:'SK하이닉스',code:'000660'},{name:'한미반도체',code:'042700'},{name:'두산에너빌리티',code:'034020'},{name:'두산',code:'000150'},{name:'현대차',code:'005380'},{name:'기아',code:'000270'},{name:'LG에너지솔루션',code:'373220'},{name:'삼성SDI',code:'006400'},{name:'NAVER',code:'035420'},{name:'카카오',code:'035720'},{name:'제주반도체',code:'080220'},{name:'대원전선',code:'006340'},{name:'대덕전자',code:'353200'}];
 const $=id=>document.getElementById(id), blank='—';
 const FLOW_DATE_KEYS=['tradeDate','date','localDate','localTradedAt','bizdate','tradingDate','bizDate','trdDt','dt','basDt','yyyymmdd','tradeDateYmd','dateString','tradedAt','dealDate','stckBsopDate','ymd','businessDate','tradingDay','stck_bsop_date','bsopDate'];
@@ -32,7 +32,7 @@ async function getJson(url){
  const task=(async()=>{
   const proxy=`${PROXY_BASE}?url=${encodeURIComponent(url)}`;
   const candidates=[proxy,`https://corsproxy.io/?url=${encodeURIComponent(url)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,url];
-  const read=async u=>{const r=await fetchTimed(u,{cache:'no-store',headers:{Accept:'application/json'}},3000);if(!r.ok)throw Error(`HTTP ${r.status}`);const d=JSON.parse(await r.text());if(d?.error)throw Error(d.error);return d};
+  const read=async u=>{const r=await fetchTimed(u,{cache:'no-store',headers:{Accept:'application/json'}},8500);if(!r.ok)throw Error(`HTTP ${r.status}`);const d=JSON.parse(await r.text());if(d?.error)throw Error(d.error);return d};
   let data,lastError;
   for(const candidate of candidates){try{data=await read(candidate);break}catch(e){lastError=e}}
   if(data===undefined)throw lastError||Error('API 요청 실패');
@@ -78,7 +78,7 @@ async function getText(url){
  const task=(async()=>{
   const proxy=`${PROXY_BASE}?url=${encodeURIComponent(url)}`;
   const candidates=[proxy,`https://corsproxy.io/?url=${encodeURIComponent(url)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,url];
-  const read=async u=>{const r=await fetchTimed(u,{cache:'no-store',headers:{Accept:'text/html,application/json,*/*'}},3000);if(!r.ok)throw Error(`HTTP ${r.status}`);let t=await r.text();if(!t||t.length<30)throw Error('빈 응답');try{const j=JSON.parse(t);if(typeof j.contents==='string'&&j.contents.length>20)t=j.contents;else if(typeof j.content==='string'&&j.content.length>20)t=j.content;else if(typeof j.body==='string'&&j.body.length>20)t=j.body;else if(typeof j.data==='string'&&j.data.length>20)t=j.data}catch{}if(!t||t.length<30)throw Error('빈 응답');return t};
+  const read=async u=>{const r=await fetchTimed(u,{cache:'no-store',headers:{Accept:'text/html,application/json,*/*'}},8500);if(!r.ok)throw Error(`HTTP ${r.status}`);let t=await r.text();if(!t||t.length<30)throw Error('빈 응답');let parsed=null;try{parsed=JSON.parse(t)}catch{}if(parsed&&typeof parsed==='object'){if(parsed.error)throw Error(String(parsed.error));const embedded=parsed.contents??parsed.content??parsed.body??parsed.data;if(typeof embedded==='string'&&embedded.length>20)t=embedded;else if(!Array.isArray(parsed))throw Error('HTML 대신 JSON 응답을 받았습니다.')}if(!t||t.length<30)throw Error('빈 응답');return t};
   let data,lastError;for(const candidate of candidates){try{data=await read(candidate);break}catch(e){lastError=e}}
   if(data===undefined)throw lastError||Error('텍스트 조회 실패');
   textMemoryCache.set(url,{value:data,expires:Date.now()+120000});
@@ -701,7 +701,7 @@ function render(s){current={...current,...s};{const ex=num(s.foreignFloat);if(ex
 function normalize(item){const code=String(item.code||item.itemCode||item.stockCode||item.reutersCode||'').replace(/\D/g,'');return code?{name:item.name||item.stockName||item.itemName||code,code:code.padStart(6,'0')}:null}
 async function search(q){if(/^\d{6}$/.test(q))return[{name:seed.find(x=>x.code===q)?.name||q,code:q}];const d=await first([`${API}/front-api/search/autoComplete?query=${encodeURIComponent(q)}&target=stock,index,marketindicator,coin,ipo`]);const a=d?.result?.items||d?.items||d?.result||[];return(Array.isArray(a)?a:[]).map(normalize).filter(Boolean).slice(0,12)}
 function showResults(items,q,msg=''){const box=$('results');box.hidden=!q;if(msg){box.innerHTML=`<div class="result">${escapeHtml(msg)}</div>`;return}if(!items.length){box.innerHTML='<div class="result">검색 결과가 없습니다.</div>';return}box.innerHTML=items.map(x=>`<button class="result" data-code="${x.code}" data-name="${escapeHtml(x.name)}">${escapeHtml(x.name)}<small>${x.code}</small> ›</button>`).join('');box.querySelectorAll('[data-code]').forEach(b=>b.onclick=()=>load(b.dataset.code,b.dataset.name))}
-async function load(code,name=''){dailyChartPeriod='day';chartRangeSel={...chartRangeDefault};dailyRowsStore.delete(code);foreignStore.delete(code);renderRangeTabs('day');$('dailyChartTitle').textContent='120일봉 차트';dailyChartCache.clear();loadInvestorTrend(code);dailyChartForeignDone.clear();dailyChartForeignInFlight.clear();document.querySelectorAll('.daily-chart-tabs button').forEach(b=>{b.classList.toggle('active',b.dataset.period==='day');b.setAttribute('aria-selected',String(b.dataset.period==='day'))});const id=++seq,known=seed.find(x=>x.code===code);current={code,name:name||known?.name||code};const dartLink=$('dartLink');if(dartLink){const dartName=name||known?.name||code;dartLink.href=`https://dart.fss.or.kr/html/search/SearchCompanyIR3_M.html?textCrpNM=${encodeURIComponent(dartName)}`;dartLink.dataset.dartName=dartName;}updateFavoriteButton();$('name').textContent=current.name;$('code').textContent=code;$('change').textContent='데이터 조회 중…';$('status').textContent='네이버 증권 데이터 조회 중…';$('query').value=current.name;$('results').hidden=true;$('chart').innerHTML='<div class="chart-empty">분기 재무 데이터 조회 중…</div>';try{const flowKrxPromise=Promise.race([fetchFlowHistory(code,'KRX'),new Promise(resolve=>setTimeout(()=>resolve(null),2800))]);const flowNxtPromise=Promise.race([fetchFlowHistory(code,'NXT'),new Promise(resolve=>setTimeout(()=>resolve(null),2800))]);const floatSharesPromise=Promise.race([loadFloatingSharesFromCompany(code).catch(()=>null),new Promise(resolve=>setTimeout(()=>resolve(null),2200))]);const pricePromise=loadDailyPrices120(code,raw=>{if(id!==seq)return;renderDailyChart(raw,'day')});pricePromise.then(raw=>{if(id!==seq)return;dailyChartCache.set(code+'-day',raw);renderDailyChart(raw,'day');loadChartPeriod('day')}).catch(()=>{});const results=await Promise.allSettled([
+async function load(code,name=''){dailyChartPeriod='day';chartRangeSel={...chartRangeDefault};dailyRowsStore.delete(code);foreignStore.delete(code);renderRangeTabs('day');$('dailyChartTitle').textContent='120일봉 차트';dailyChartCache.clear();loadInvestorTrend(code);dailyChartForeignDone.clear();dailyChartForeignInFlight.clear();document.querySelectorAll('.daily-chart-tabs button').forEach(b=>{b.classList.toggle('active',b.dataset.period==='day');b.setAttribute('aria-selected',String(b.dataset.period==='day'))});const id=++seq,known=seed.find(x=>x.code===code);current={code,name:name||known?.name||code};dartConsensusQuarters=[];dartFinancialDataCache=null;dartNaverEarningsData=null;renderDartSurpriseAnalysis();loadDartFinancials();const dartLink=$('dartLink');if(dartLink){const dartName=name||known?.name||code;dartLink.href=`https://dart.fss.or.kr/html/search/SearchCompanyIR3_M.html?textCrpNM=${encodeURIComponent(dartName)}`;dartLink.dataset.dartName=dartName;}updateFavoriteButton();$('name').textContent=current.name;$('code').textContent=code;$('change').textContent='데이터 조회 중…';$('status').textContent='네이버 증권 데이터 조회 중…';$('query').value=current.name;$('results').hidden=true;$('chart').innerHTML='<div class="chart-empty">분기 재무 데이터 조회 중…</div>';try{const flowKrxPromise=Promise.race([fetchFlowHistory(code,'KRX'),new Promise(resolve=>setTimeout(()=>resolve(null),2800))]);const flowNxtPromise=Promise.race([fetchFlowHistory(code,'NXT'),new Promise(resolve=>setTimeout(()=>resolve(null),2800))]);const floatSharesPromise=Promise.race([loadFloatingSharesFromCompany(code).catch(()=>null),new Promise(resolve=>setTimeout(()=>resolve(null),2200))]);const pricePromise=loadDailyPrices120(code,raw=>{if(id!==seq)return;renderDailyChart(raw,'day')});pricePromise.then(raw=>{if(id!==seq)return;dailyChartCache.set(code+'-day',raw);renderDailyChart(raw,'day');loadChartPeriod('day')}).catch(()=>{});const results=await Promise.allSettled([
 first([`${API}/api/stock/${code}/basic`]),
 first([`${API}/api/stock/${code}/integration`]),
 first([`${API}/api/stock/${code}/finance/quarter`]),
@@ -711,7 +711,7 @@ first([`${DESKTOP}/api/domestic/detail/${code}/consensus`]),
 flowKrxPromise,
 flowNxtPromise,
 floatSharesPromise
-]);if(id!==seq)return;const val=i=>results[i].status==='fulfilled'?results[i].value:null;const basic=val(0),integration=val(1),quarter=val(2),annual=val(3),priceRaw=val(4),consensus=val(5),flowKr=val(6),flowNx=val(7),flowTotal=mergeFlowHistory(flowKr,flowNx),flowForeignTotal=flowTotal,flowForeignKr=flowKr,flowForeignNx=flowNx,flowInstTotal=flowTotal,flowInstKr=flowKr,flowInstNx=flowNx;const priceData=Array.isArray(priceRaw)?priceRaw[0]||{}:priceRaw||{};const priceByDate=priceHistoryMap(priceRaw);if(!basic&&!integration&&!priceData)throw Error('네이버 증권 API 응답을 받지 못했습니다.');const b=extractBasic(basic||{},integration||{},priceData,consensus||{},code,current.name);const q=parseFinance(quarter),a=parseFinance(annual),iq=parseFinance(integration);const allQ=q.quarters.length?q.quarters:iq.quarters;const actualQ=latestActual(allQ);const annualActual=latestActual(a.quarters);const previousYear=new Date().getFullYear()-1;const annualParsedProfit=a.quarters.find(x=>!x.est&&!/\(E\)/i.test(x.label)&&Number((String(x.label||'')+' '+String(x.key||'')).match(/20\d{2}/)?.[0])===previousYear&&x.profit!==null)?.profit??null;const annualOp=annual?.annualProfitFallback??annualOperatingProfit(annual,allQ)??annualParsedProfit??annualOperatingProfit(integration,allQ)??annualProfitFromCompleteQuarters(allQ);if(annualOp!==null)b.annualOp=`${annualOp.toLocaleString('ko-KR',{maximumFractionDigits:1})}억`;const last4=actualQ.slice(-4);if(last4.length===4&&last4.every(x=>x.profit!==null)){const sum=last4.reduce((s,x)=>s+x.profit,0);b.ttmOp=`${sum.toLocaleString('ko-KR',{maximumFractionDigits:1})}억`}if(last4.length===4&&last4.every(x=>x.net!==null)){const sum=last4.reduce((s,x)=>s+x.net,0);const opSum=last4.every(x=>x.profit!==null)?last4.reduce((s,x)=>s+x.profit,0):null;b.ttmNet=`${sum.toLocaleString('ko-KR',{maximumFractionDigits:1})}억${opSum!==null&&opSum!==0?` (${(sum/opSum*100).toLocaleString('ko-KR',{maximumFractionDigits:1})}%)`:''}`}const latest=actualQ[actualQ.length-1];if(latest){if(latest.roe!==null)b.roe=fmt(latest.roe,'%');if(latest.debt!==null)b.debt=fmt(latest.debt,'%')}if(b.roe===blank||b.debt===blank){const aq=annualActual[annualActual.length-1];if(aq){if(b.roe===blank&&aq.roe!==null)b.roe=fmt(aq.roe,'%');if(b.debt===blank&&aq.debt!==null)b.debt=fmt(aq.debt,'%')}}const marketCapRaw=metric(integration||{},['marketValue','marketCap','marketSum','marketCapitalization','시가총액']);const marketCapEok=capToEok(marketCapRaw);let floatSharesCount=(val(8)!==null&&val(8)>0)?val(8):floatingShares({basic:basic||{},integration:integration||{}},marketCapRaw,num(b.price));if(!(floatSharesCount>0)&&String(code)==='141000'){const viatronIssuedShares=12114710;const viatronFloatRatio=62.63;floatSharesCount=Math.round(viatronIssuedShares*viatronFloatRatio/100)}const annualOpValue=annualOp!==null?annualOp:null;const ttmOpValue=last4.length===4&&last4.every(x=>x.profit!==null)?last4.reduce((s,x)=>s+x.profit,0):null;const expected4=allQ.filter(x=>x.profit!==null).slice(-4);const estTtmOpValue=expected4.length===4?expected4.reduce((s,x)=>s+x.profit,0):null;if(marketCapEok!==null&&annualOpValue!==null&&annualOpValue!==0)b.annualMultiple=fmt(marketCapEok/annualOpValue,'배');if(marketCapEok!==null&&ttmOpValue!==null&&ttmOpValue!==0)b.ttmMultiple=fmt(marketCapEok/ttmOpValue,'배');if(marketCapEok!==null&&estTtmOpValue!==null&&estTtmOpValue!==0)b.estTtmMultiple=fmt(marketCapEok/estTtmOpValue,'배');const displayQ=allQ.filter(x=>x.profit!==null||x.eps!==null).slice(-6);b.quarters=displayQ;b.dailyPrices=Array.isArray(priceRaw)?priceRaw:objects(priceRaw);b.epsRows=allQ.slice(-6).map(x=>[x.label,x.eps===null?blank:x.eps.toLocaleString('ko-KR',{maximumFractionDigits:1})]);const flows=[['fTotal',flowForeignTotal,'foreign','TOTAL'],['fKr',flowForeignKr,'foreign','KRX'],['fNx',flowForeignNx,'foreign','NXT'],['iTotal',flowInstTotal,'institution','TOTAL'],['iKr',flowInstKr,'institution','KRX'],['iNx',flowInstNx,'institution','NXT']];for(const [prefix,raw,type,exchange] of flows){const f=flowSummary(raw,type,exchange,priceByDate,num(b.price),floatSharesCount);const count=$(prefix+'Count'),streak=$(prefix+'Streak'),sellStreak=$(prefix+'SellStreak');if(count){count.innerHTML=foreignCountHtml(f);count.style.color='';count.style.fontWeight='500'}if(streak)streak.innerHTML=streakDisplayHtml(f.streak,f.latestSign>0);if(sellStreak)sellStreak.innerHTML=streakDisplayHtml(f.sellStreak,f.latestSign<0)}const combinedFlows=[['xTotal',combinedInvestorFlow(flowTotal,'TOTAL'),'TOTAL'],['xKr',combinedInvestorFlow(flowKr,'KRX'),'KRX'],['xNx',combinedInvestorFlow(flowNx,'NXT'),'NXT']];for(const [prefix,raw,exchange] of combinedFlows){const f=flowSummary(raw,'foreign',exchange,priceByDate,num(b.price),floatSharesCount);const market=String(exchange||'TOTAL').toLowerCase();const rows=flowRecords(raw);const byDate=new Map();for(const row of rows){const date=String(row?.localTradedAt||'').slice(0,10);if(!date||byDate.has(date))continue;const source=row?.[market];if(!source)continue;const foreign=num(source.foreignSignNetVolume),institution=num(source.institutionSignNetVolume);if(foreign===null||institution===null)continue;byDate.set(date,{foreign,institution})}const dated=[...byDate.entries()].sort((a,b)=>b[0].localeCompare(a[0])).slice(0,40);f.periods=f.periods.map(p=>{const slice=dated.slice(0,p.period);return{...p,count:slice.filter(([,v])=>v.foreign>0||v.institution>0).length,bothCount:slice.filter(([,v])=>v.foreign>0&&v.institution>0).length}});const count=$(prefix+'Count');if(count){count.innerHTML=foreignCountHtml(f,true);count.style.color='';count.style.fontWeight='500'}}const flowStatus=[['통합외국인',flowForeignTotal,'foreign','TOTAL'],['KRX외국인',flowForeignKr,'foreign','KRX'],['NXT외국인',flowForeignNx,'foreign','NXT'],['통합기관',flowInstTotal,'institution','TOTAL'],['KRX기관',flowInstKr,'institution','KRX'],['NXT기관',flowInstNx,'institution','NXT']];const statusNames=['기본정보','주요지표','분기재무','연간재무','가격정보','컨센서스'];$('status').textContent=`유동주식수 ${floatSharesCount!==null&&floatSharesCount>0?'확인':'미확인'} · `+results.slice(0,6).map((r,i)=>{if(r.status!=='fulfilled')return `${statusNames[i]} ${i===3?`실패 (${String(r.reason?.message||'원인 미확인').slice(0,110)})`:'실패'}`;return `${statusNames[i]} OK`}).concat(flowStatus.map(([label,raw,type,exchange])=>{const f=flowSummary(raw,type,exchange,priceByDate,num(b.price),floatSharesCount);const meta=raw?._flowMeta;if(f.count===null)return `${label} ${exchange==='NXT'?'자료 없음':'통합 필드 확인 필요'}`;return `${label} ${f.days}/40일 수집${meta?`, ${meta.pages}페이지`:''}`})).join(' · ');render(b)}catch(e){if(id!==seq)return;$('status').textContent=`조회 오류: ${e.message}`;render({name:current.name,code,change:`조회 실패: ${e.message}`,quarters:[]})}}
+]);if(id!==seq)return;const val=i=>results[i].status==='fulfilled'?results[i].value:null;const basic=val(0),integration=val(1),quarter=val(2),annual=val(3),priceRaw=val(4),consensus=val(5),flowKr=val(6),flowNx=val(7),flowTotal=mergeFlowHistory(flowKr,flowNx),flowForeignTotal=flowTotal,flowForeignKr=flowKr,flowForeignNx=flowNx,flowInstTotal=flowTotal,flowInstKr=flowKr,flowInstNx=flowNx;const priceData=Array.isArray(priceRaw)?priceRaw[0]||{}:priceRaw||{};const priceByDate=priceHistoryMap(priceRaw);if(!basic&&!integration&&!priceData)throw Error('네이버 증권 API 응답을 받지 못했습니다.');const b=extractBasic(basic||{},integration||{},priceData,consensus||{},code,current.name);const q=parseFinance(quarter),a=parseFinance(annual),iq=parseFinance(integration);const allQ=q.quarters.length?q.quarters:iq.quarters;dartConsensusQuarters=allQ;if(dartFinancialDataCache&&current.code===code)renderDartSurpriseAnalysis();const actualQ=latestActual(allQ);const annualActual=latestActual(a.quarters);const previousYear=new Date().getFullYear()-1;const annualParsedProfit=a.quarters.find(x=>!x.est&&!/\(E\)/i.test(x.label)&&Number((String(x.label||'')+' '+String(x.key||'')).match(/20\d{2}/)?.[0])===previousYear&&x.profit!==null)?.profit??null;const annualOp=annual?.annualProfitFallback??annualOperatingProfit(annual,allQ)??annualParsedProfit??annualOperatingProfit(integration,allQ)??annualProfitFromCompleteQuarters(allQ);if(annualOp!==null)b.annualOp=`${annualOp.toLocaleString('ko-KR',{maximumFractionDigits:1})}억`;const last4=actualQ.slice(-4);if(last4.length===4&&last4.every(x=>x.profit!==null)){const sum=last4.reduce((s,x)=>s+x.profit,0);b.ttmOp=`${sum.toLocaleString('ko-KR',{maximumFractionDigits:1})}억`}if(last4.length===4&&last4.every(x=>x.net!==null)){const sum=last4.reduce((s,x)=>s+x.net,0);const opSum=last4.every(x=>x.profit!==null)?last4.reduce((s,x)=>s+x.profit,0):null;b.ttmNet=`${sum.toLocaleString('ko-KR',{maximumFractionDigits:1})}억${opSum!==null&&opSum!==0?` (${(sum/opSum*100).toLocaleString('ko-KR',{maximumFractionDigits:1})}%)`:''}`}const latest=actualQ[actualQ.length-1];if(latest){if(latest.roe!==null)b.roe=fmt(latest.roe,'%');if(latest.debt!==null)b.debt=fmt(latest.debt,'%')}if(b.roe===blank||b.debt===blank){const aq=annualActual[annualActual.length-1];if(aq){if(b.roe===blank&&aq.roe!==null)b.roe=fmt(aq.roe,'%');if(b.debt===blank&&aq.debt!==null)b.debt=fmt(aq.debt,'%')}}const marketCapRaw=metric(integration||{},['marketValue','marketCap','marketSum','marketCapitalization','시가총액']);const marketCapEok=capToEok(marketCapRaw);let floatSharesCount=(val(8)!==null&&val(8)>0)?val(8):floatingShares({basic:basic||{},integration:integration||{}},marketCapRaw,num(b.price));if(!(floatSharesCount>0)&&String(code)==='141000'){const viatronIssuedShares=12114710;const viatronFloatRatio=62.63;floatSharesCount=Math.round(viatronIssuedShares*viatronFloatRatio/100)}const annualOpValue=annualOp!==null?annualOp:null;const ttmOpValue=last4.length===4&&last4.every(x=>x.profit!==null)?last4.reduce((s,x)=>s+x.profit,0):null;const expected4=allQ.filter(x=>x.profit!==null).slice(-4);const estTtmOpValue=expected4.length===4?expected4.reduce((s,x)=>s+x.profit,0):null;if(marketCapEok!==null&&annualOpValue!==null&&annualOpValue!==0)b.annualMultiple=fmt(marketCapEok/annualOpValue,'배');if(marketCapEok!==null&&ttmOpValue!==null&&ttmOpValue!==0)b.ttmMultiple=fmt(marketCapEok/ttmOpValue,'배');if(marketCapEok!==null&&estTtmOpValue!==null&&estTtmOpValue!==0)b.estTtmMultiple=fmt(marketCapEok/estTtmOpValue,'배');const displayQ=allQ.filter(x=>x.profit!==null||x.eps!==null).slice(-6);b.quarters=displayQ;b.dailyPrices=Array.isArray(priceRaw)?priceRaw:objects(priceRaw);b.epsRows=allQ.slice(-6).map(x=>[x.label,x.eps===null?blank:x.eps.toLocaleString('ko-KR',{maximumFractionDigits:1})]);const flows=[['fTotal',flowForeignTotal,'foreign','TOTAL'],['fKr',flowForeignKr,'foreign','KRX'],['fNx',flowForeignNx,'foreign','NXT'],['iTotal',flowInstTotal,'institution','TOTAL'],['iKr',flowInstKr,'institution','KRX'],['iNx',flowInstNx,'institution','NXT']];for(const [prefix,raw,type,exchange] of flows){const f=flowSummary(raw,type,exchange,priceByDate,num(b.price),floatSharesCount);const count=$(prefix+'Count'),streak=$(prefix+'Streak'),sellStreak=$(prefix+'SellStreak');if(count){count.innerHTML=foreignCountHtml(f);count.style.color='';count.style.fontWeight='500'}if(streak)streak.innerHTML=streakDisplayHtml(f.streak,f.latestSign>0);if(sellStreak)sellStreak.innerHTML=streakDisplayHtml(f.sellStreak,f.latestSign<0)}const combinedFlows=[['xTotal',combinedInvestorFlow(flowTotal,'TOTAL'),'TOTAL'],['xKr',combinedInvestorFlow(flowKr,'KRX'),'KRX'],['xNx',combinedInvestorFlow(flowNx,'NXT'),'NXT']];for(const [prefix,raw,exchange] of combinedFlows){const f=flowSummary(raw,'foreign',exchange,priceByDate,num(b.price),floatSharesCount);const market=String(exchange||'TOTAL').toLowerCase();const rows=flowRecords(raw);const byDate=new Map();for(const row of rows){const date=String(row?.localTradedAt||'').slice(0,10);if(!date||byDate.has(date))continue;const source=row?.[market];if(!source)continue;const foreign=num(source.foreignSignNetVolume),institution=num(source.institutionSignNetVolume);if(foreign===null||institution===null)continue;byDate.set(date,{foreign,institution})}const dated=[...byDate.entries()].sort((a,b)=>b[0].localeCompare(a[0])).slice(0,40);f.periods=f.periods.map(p=>{const slice=dated.slice(0,p.period);return{...p,count:slice.filter(([,v])=>v.foreign>0||v.institution>0).length,bothCount:slice.filter(([,v])=>v.foreign>0&&v.institution>0).length}});const count=$(prefix+'Count');if(count){count.innerHTML=foreignCountHtml(f,true);count.style.color='';count.style.fontWeight='500'}}const flowStatus=[['통합외국인',flowForeignTotal,'foreign','TOTAL'],['KRX외국인',flowForeignKr,'foreign','KRX'],['NXT외국인',flowForeignNx,'foreign','NXT'],['통합기관',flowInstTotal,'institution','TOTAL'],['KRX기관',flowInstKr,'institution','KRX'],['NXT기관',flowInstNx,'institution','NXT']];const statusNames=['기본정보','주요지표','분기재무','연간재무','가격정보','컨센서스'];$('status').textContent=`유동주식수 ${floatSharesCount!==null&&floatSharesCount>0?'확인':'미확인'} · `+results.slice(0,6).map((r,i)=>{if(r.status!=='fulfilled')return `${statusNames[i]} ${i===3?`실패 (${String(r.reason?.message||'원인 미확인').slice(0,110)})`:'실패'}`;return `${statusNames[i]} OK`}).concat(flowStatus.map(([label,raw,type,exchange])=>{const f=flowSummary(raw,type,exchange,priceByDate,num(b.price),floatSharesCount);const meta=raw?._flowMeta;if(f.count===null)return `${label} ${exchange==='NXT'?'자료 없음':'통합 필드 확인 필요'}`;return `${label} ${f.days}/40일 수집${meta?`, ${meta.pages}페이지`:''}`})).join(' · ');render(b)}catch(e){if(id!==seq)return;$('status').textContent=`조회 오류: ${e.message}`;render({name:current.name,code,change:`조회 실패: ${e.message}`,quarters:[]})}}
 $('searchBtn').onclick=async()=>{const q=$('query').value.trim();if(!q)return;try{const r=await search(q);if(r.length===1)load(r[0].code,r[0].name);else showResults(r,q)}catch{const local=seed.filter(x=>x.name.toLowerCase().includes(q.toLowerCase())||x.code.startsWith(q));if(local.length===1)load(local[0].code,local[0].name);else showResults(local,q,'검색 API 오류. 6자리 종목코드로 검색해 주세요.')}};$('query').addEventListener('keydown',e=>{if(e.key==='Enter')$('searchBtn').click()});$('query').addEventListener('input',()=>{const q=$('query').value.trim();$('clear').hidden=!q;clearTimeout(timer);if(!q){$('results').hidden=true;return}timer=setTimeout(async()=>{try{showResults(await search(q),q)}catch{showResults(seed.filter(x=>x.name.toLowerCase().includes(q.toLowerCase())||x.code.startsWith(q)),q)}},350)});$('clear').onclick=()=>{$('query').value='';$('results').hidden=true;$('clear').hidden=true};$('theme').onclick=()=>document.body.classList.toggle('dark');$('refresh').onclick=()=>load(current.code,current.name);$('fav').onclick=toggleFavorite;renderFavorites();updateFavoriteButton();document.querySelectorAll('.daily-chart-tabs button').forEach(b=>b.addEventListener('click',()=>loadChartPeriod(b.dataset.period)));function findExactNumber(raw,keys){const wanted=new Set(keys.map(k=>k.toLowerCase()));for(const o of objects(raw)){for(const [k,v] of Object.entries(o)){if(!wanted.has(k.toLowerCase())||v===null||v===undefined||v==='')continue;const n=financeNum(v?.value??v?.formattedValue??v?.text??v?.displayValue??v?.amount??v);if(n!==null&&n>0)return n}}return null}
 async function quickCapForStock(x){try{const [basic,integration]=await Promise.all([first([`${API}/api/stock/${x.code}/basic`]),first([`${API}/api/stock/${x.code}/integration`])]);const currentPrice=findExactNumber(basic,['currentPrice','nowPrice','tradePrice','closePrice','dealPrice','stockPrice'])??findExactNumber(integration,['currentPrice','nowPrice','tradePrice','closePrice','dealPrice','stockPrice']);const shares=findExactNumber(basic,['listedShares','listedShareCount','totalListedShares','sharesOutstanding','totalShares','issuedShares','listedStockCount'])??findExactNumber(integration,['listedShares','listedShareCount','totalListedShares','sharesOutstanding','totalShares','issuedShares','listedStockCount']);if(currentPrice!==null&&shares!==null)return {...x,cap:currentPrice*shares/100000000,capSource:'currentPrice×listedShares'};const rawCap=metric(integration,['marketValue','marketCap','marketSum','marketCapitalization','marketCapital','시가총액'])??metric(basic,['marketValue','marketCap','marketSum','marketCapitalization','marketCapital','시가총액']);const cap=capToEok(rawCap);return cap!==null?{...x,cap,capSource:'apiMarketCap'}:null}catch{return null}}
 function collectQuickStocksAllLists(root,out=[],seen=new Set()){
@@ -927,3 +927,196 @@ async function loadInvestorTrend(code){
 }
 $('invTabs')?.addEventListener('click',e=>{const b=e.target.closest('button[data-range]');if(!b)return;invRangeSel=Number(b.dataset.range);renderInvestorTabs();renderInvestorTrend()});
 renderInvestorTabs();
+
+
+// OpenDART 분기 실적: Worker에 DART_API_KEY Secret을 설정해야 실제 데이터가 연결됩니다.
+const DART_PROXY=PROXY_BASE;
+const dartFmt=v=>{if(v===null||v===undefined||!Number.isFinite(Number(v)))return '—';return (Number(v)/1e8).toLocaleString('ko-KR',{maximumFractionDigits:1})};
+const dartNum=v=>{if(v===null||v===undefined||v===''||v==='-')return null;const n=Number(String(v).replace(/,/g,''));return Number.isFinite(n)?n:null};
+function dartQuarterLabel(y,q){return `${y}년 ${q}Q`}
+// DART 확정 실적과 WiseReport 원본 어닝서프라이즈 자료를 별도로 표시한다.
+// 컨센서스는 반드시 WiseReport 어닝서프라이즈 원본 표에서만 가져오며,
+// 일반 분기재무 API의 예상 영업이익으로 대체하거나 덮어쓰지 않는다.
+let dartConsensusQuarters=[],dartFinancialDataCache=null,dartNaverEarningsData=null,dartNaverEarningsError='';
+function parseDartComparePeriod(item){
+ const label=String(item?.label??'')+' '+String(item?.key??'');
+ let m=label.match(/((?:19|20)\d{2})\s*[.\-/]\s*(\d{1,2})/);
+ if(m){const month=Number(m[2]);if(month>=1&&month<=12)return{year:Number(m[1]),quarter:Math.ceil(month/3)}}
+ m=label.match(/((?:19|20)\d{2})\s*년\s*(\d)\s*분기/);if(m)return{year:Number(m[1]),quarter:Number(m[2])};
+ m=label.match(/((?:19|20)\d{2})\s*년?\s*(\d)\s*Q/i);if(m)return{year:Number(m[1]),quarter:Number(m[2])};
+ return null;
+}
+function dartCompareEok(value){const n=dartNum(value);return n===null?null:n/1e8}
+function dartCompareFmt(value){return Number(value).toLocaleString('ko-KR',{maximumFractionDigits:1})}
+function naverSurpriseNumber(value){
+ const s=String(value??'').replace(/\u00a0/g,' ').trim();
+ if(!s||/^(?:-|—|–|N\/A|자료없음)$/i.test(s))return null;
+ const cleaned=s.replace(/,/g,'').replace(/[^0-9.+\-]/g,'');
+ if(!cleaned||!/[0-9]/.test(cleaned))return null;
+ const negative=/^\s*\(.*\)\s*$/.test(s)||/^\s*[-−]/.test(s);const n=Number(cleaned);return Number.isFinite(n)?(negative?-Math.abs(n):n):null;
+}
+function parseNaverEarningsSurprise(html){
+ const source=String(html||'');
+ // WiseReport does not put the earnings rows in the static <tbody>.
+ // EarnigList() embeds the exact source data in `var res = {...}` and
+ // builds the visible table from that object at runtime.
+ try{
+  const match=source.match(/var\s+EarnigList\s*=\s*function\s*\(\s*\)\s*\{[\s\S]*?var\s+res\s*=\s*(\{[\s\S]*?\})\s*;\s*tmp\s*=/i);
+  if(match){
+   const payload=JSON.parse(match[1]);
+   const periods=Array.isArray(payload.yymm)?payload.yymm:[];
+   const series=Array.isArray(payload.data)?payload.data:[];
+   const rows=[];
+   for(let i=1;i<periods.length;i++){
+    const raw=String(periods[i]||'');
+    const parsed=raw.match(/^((?:19|20)\d{2})(\d{2})$/);
+    if(!parsed)continue;
+    const year=Number(parsed[1]),month=Number(parsed[2]);
+    if(month<1||month>12)continue;
+    const dataKey=String(i+1); // template skips object key '1'; visible periods start at yymm[1].
+    const valueAt=(seriesIndex)=>naverSurpriseNumber(series[seriesIndex]?.[dataKey]??null);
+    rows.push({
+     year,
+     quarter:Math.ceil(month/3),
+     consensus:valueAt(0),
+     preliminary:valueAt(1),
+     surprise:valueAt(2),
+     yoy:valueAt(3)
+    });
+   }
+   if(rows.some(r=>r.consensus!==null||r.preliminary!==null||r.surprise!==null))return rows;
+  }
+ }catch(e){console.warn('네이버 어닝서프라이즈 원본 데이터 분석 실패',e)}
+ // Fallback for a future WiseReport page variant that renders the table
+ // directly in HTML instead of embedding the EarnigList data object.
+ try{
+  const doc=new DOMParser().parseFromString(source,'text/html');
+  const dateRe=/((?:19|20)\d{2})\s*[./-]\s*(\d{1,2})/;
+  const cleanCell=cell=>(cell?.innerText||cell?.textContent||'').replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();
+  for(const table of doc.querySelectorAll('table')){
+   const rows=[...table.rows];
+   const headerIndex=rows.findIndex(tr=>[...tr.cells].some(c=>/재무연월/.test(cleanCell(c))));
+   if(headerIndex<0)continue;
+   const dateCols=[];
+   for(let ri=headerIndex;ri<=Math.min(headerIndex+2,rows.length-1);ri++){
+    [...rows[ri].cells].forEach((cell,ci)=>{
+     const m=cleanCell(cell).match(dateRe);
+     if(m)dateCols.push({col:ci,year:Number(m[1]),quarter:Math.ceil(Number(m[2])/3)});
+    });
+    if(dateCols.length)break;
+   }
+   if(!dateCols.length)continue;
+   const result=new Map();let operating=false;
+   for(let ri=headerIndex+1;ri<rows.length;ri++){
+    const cells=[...rows[ri].cells].map(cleanCell),txt=cells.join(' ');
+    if(/당기순이익/.test(txt)){if(operating)break;continue}
+    if(cells.some(x=>/^영업이익$/.test(x)))operating=true;
+    if(!operating)continue;
+    const fi=cells.findIndex(x=>/^(컨센서스|잠정치|surprise)$/i.test(x));
+    if(fi<0)continue;
+    const label=cells[fi],field=/컨센서스/i.test(label)?'consensus':/잠정치/.test(label)?'preliminary':'surprise';
+    dateCols.forEach((p,idx)=>{
+     const key=`${p.year}-${p.quarter}`,item=result.get(key)||{year:p.year,quarter:p.quarter,consensus:null,preliminary:null,surprise:null};
+     item[field]=naverSurpriseNumber(cells[fi+1+idx]??null);result.set(key,item);
+    });
+   }
+   const parsedRows=[...result.values()].sort((a,b)=>a.year-b.year||a.quarter-b.quarter);
+   if(parsedRows.length)return parsedRows;
+  }
+ }catch(e){console.warn('네이버 어닝서프라이즈 HTML 분석 실패',e)}
+ return [];
+}
+async function loadNaverEarningsSurprise(code){
+ // This is the confirmed source used by the Naver Pay Securities company page.
+ // Do not put navercomp2 first: the indexed live table is served by navercomp.
+ const urls=[
+  `https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd=${encodeURIComponent(code)}`,
+  `https://comp.wisereport.co.kr/company/c1010001.aspx?cmp_cd=${encodeURIComponent(code)}&cn=`
+ ];
+ let lastError=null;
+ for(const url of urls){
+  try{
+   const html=await getText(url);
+   const rows=parseNaverEarningsSurprise(html);
+   if(rows.length)return rows;
+   lastError=Error(`원본 페이지는 응답했지만 영업이익 어닝서프라이즈 행을 찾지 못했습니다: ${new URL(url).hostname}`);
+  }catch(error){lastError=error}
+ }
+ throw lastError||Error('네이버 기업현황 어닝서프라이즈 조회 실패');
+}
+function renderDartSurpriseAnalysis(){
+ const host=$('dartSurpriseResult');if(!host)return;
+ const dartRows=(Array.isArray(dartFinancialDataCache?.quarters)?dartFinancialDataCache.quarters:[])
+  .map(r=>({year:Number(r.year),quarter:Number(r.quarter),dartActual:dartCompareEok(r.operatingProfit)}))
+  .filter(r=>Number.isFinite(r.year)&&r.quarter>=1&&r.quarter<=4&&r.dartActual!==null);
+ const naverRows=Array.isArray(dartNaverEarningsData)?dartNaverEarningsData:[];
+ const periods=new Map();
+ const keyOf=p=>`${p.year}-${p.quarter}`;
+ for(const r of naverRows){const k=keyOf(r);periods.set(k,{year:r.year,quarter:r.quarter,consensus:r.consensus??null,preliminary:r.preliminary??null,naverSurprise:r.surprise??null})}
+ for(const r of dartRows){const k=keyOf(r),p=periods.get(k)||{year:r.year,quarter:r.quarter};p.dartActual=r.dartActual;periods.set(k,p)}
+ const rows=[...periods.values()]
+  .filter(p=>p.consensus!==null&&p.consensus!==undefined||p.preliminary!==null&&p.preliminary!==undefined||p.dartActual!==null&&p.dartActual!==undefined||p.naverSurprise!==null&&p.naverSurprise!==undefined)
+  .sort((a,b)=>b.year-a.year||b.quarter-a.quarter).slice(0,2);
+ const fmt=v=>v===null||v===undefined||!Number.isFinite(Number(v))?'-':Number(v).toLocaleString('ko-KR',{maximumFractionDigits:1});
+ const signClass=v=>v===null||v===undefined||!Number.isFinite(Number(v))?'':Number(v)>0?'positive':Number(v)<0?'negative':'neutral';
+ if(!rows.length){
+  host.className='dart-surprise-table-state';
+  host.innerHTML=`<div class="dart-surprise-empty">${dartNaverEarningsError?`네이버 어닝서프라이즈 조회 실패: ${escapeHtml(dartNaverEarningsError)}`:'네이버 어닝서프라이즈 또는 DART 분기 실적 자료를 확인하는 중입니다.'}</div>`;
+  return;
+ }
+ const tableRows=rows.map(p=>{
+  const consensus=p.consensus??null,preliminary=p.preliminary??null,dart=p.dartActual??null;
+  const diff=dart!==null&&consensus!==null?dart-consensus:null;
+  const naverSurprise=p.naverSurprise??null;
+  const verdictValue=diff!==null?diff:naverSurprise;
+  let verdict='-',verdictClass='neutral';
+  if(verdictValue!==null&&verdictValue!==undefined&&Number.isFinite(Number(verdictValue))){
+   if(Number(verdictValue)>0){verdict='Earning Surprise';verdictClass='positive'}
+   else if(Number(verdictValue)<0){verdict='Earning Shock';verdictClass='negative'}
+   else{verdict='Earning In Line';verdictClass='neutral'}
+  }
+  const compare=`<span class="dart-compare-number ${signClass(diff)}">${fmt(diff)}</span><span class="dart-compare-bracket">[</span><span class="dart-compare-number ${signClass(naverSurprise)}">${fmt(naverSurprise)}</span><span class="dart-compare-bracket">]</span>`;
+  return `<tr><td class="period">${p.year}.${String(p.quarter*3).padStart(2,'0')}.</td><td>${fmt(consensus)}</td><td>${fmt(preliminary)}</td><td>${fmt(dart)}</td><td class="compare">${compare}</td><td><span class="dart-earnings-verdict ${verdictClass}">${verdict}</span></td></tr>`;
+ }).join('');
+ host.className='dart-surprise-table-state';
+ host.innerHTML=`<div class="dart-surprise-table-scroll"><table class="dart-surprise-table"><thead><tr><th>재무연월</th><th>컨센서스</th><th>잠정 실적</th><th>확정 실적</th><th>비교 실적</th><th>Surprise</th></tr></thead><tbody>${tableRows}</tbody></table></div><div class="dart-surprise-table-note">단위: 억원 · 비교 실적 [ ] 안은 네이버 Surprise(%) · 최근 2개 분기</div>`;
+}
+
+function renderDartFinancials(data){
+ dartFinancialDataCache=data;
+ const rows=Array.isArray(data?.quarters)?data.quarters:[];
+ const status=$('dartFinancialStatus'),body=$('dartFinancialRows'),chart=$('dartFinancialChart'),summary=$('dartFinancialSummary');
+ if(!rows.length){status.textContent=data?.message||'공시된 분기 실적을 찾지 못했습니다.';body.innerHTML='<tr><td colspan="5">표시할 분기 실적이 없습니다.</td></tr>';chart.innerHTML='<div class="chart-empty">DART 실적 데이터가 없습니다.</div>';renderDartSurpriseAnalysis();return}
+ const latest=rows[rows.length-1],fmtPct=v=>v===null?'—':`${v.toLocaleString('ko-KR',{maximumFractionDigits:1})}%`;
+ summary.innerHTML=[['최근 분기 매출액',latest.revenue],['최근 분기 영업이익',latest.operatingProfit],['최근 분기 순이익',latest.netIncome]].map(([label,v])=>`<div><small>${label}</small><b>${dartFmt(v)}억</b></div>`).join('');
+ body.innerHTML=rows.slice().reverse().map(r=>{const margin=r.revenue&&r.operatingProfit!==null?r.operatingProfit/r.revenue*100:null;return `<tr><td>${dartQuarterLabel(r.year,r.quarter)}</td><td>${dartFmt(r.revenue)}</td><td class="${r.operatingProfit<0?'negative':''}">${dartFmt(r.operatingProfit)}</td><td class="${r.netIncome<0?'negative':''}">${dartFmt(r.netIncome)}</td><td>${fmtPct(margin)}</td></tr>`}).join('');
+ const max=Math.max(1,...rows.flatMap(r=>[Math.abs(r.revenue||0),Math.abs(r.operatingProfit||0),Math.abs(r.netIncome||0)]));
+ chart.innerHTML=`<div class="dart-bars">${rows.map(r=>{const h=v=>Math.max(2,Math.abs(v||0)/max*100);return `<div class="dart-bar-group"><div class="dart-bar-set"><i class="revenue" style="height:${h(r.revenue)}%" title="매출액 ${dartFmt(r.revenue)}억"></i><i class="operating" style="height:${h(r.operatingProfit)}%" title="영업이익 ${dartFmt(r.operatingProfit)}억"></i><i class="net" style="height:${h(r.netIncome)}%" title="순이익 ${dartFmt(r.netIncome)}억"></i></div><small>${String(r.year).slice(2)}.${r.quarter}Q</small></div>`}).join('')}</div><div class="dart-chart-legend"><span><i class="revenue"></i> 매출액</span><span><i class="operating"></i> 영업이익</span><span><i class="net"></i> 순이익</span></div>`;
+ status.textContent=`${data.companyName||current.name} · ${data.fsDiv==='CFS'?'연결재무제표':'별도재무제표'} · ${rows.length}개 분기 확인`;
+ renderDartSurpriseAnalysis();
+}
+async function loadDartFinancials(){
+ const code=current.code;if(!/^\d{6}$/.test(code||''))return;
+ const status=$('dartFinancialStatus'),body=$('dartFinancialRows');
+ status.textContent='OpenDART 공식 재무제표 조회 중…';body.innerHTML='<tr><td colspan="5">DART 데이터 조회 중…</td></tr>';
+ // 네이버 어닝서프라이즈 표는 DART 조회와 병렬로 가져오되, 기존 DART 표시를 기다리게 하지 않는다.
+ dartNaverEarningsError='';
+ const naverPromise=loadNaverEarningsSurprise(code).catch(error=>{dartNaverEarningsError=String(error?.message||error||'조회 실패');console.warn('네이버 어닝서프라이즈 조회 실패',error);return null});
+ try{
+  const url=`${DART_PROXY}/?dart=financials&stock_code=${encodeURIComponent(code)}`;
+  const res=await fetch(url,{cache:'no-store'});const data=await res.json();
+  if(current.code!==code)return;
+  if(!res.ok||!data.ok)throw new Error(data.message||data.error||`HTTP ${res.status}`);
+  renderDartFinancials(data);
+ }catch(e){
+  if(current.code!==code)return;
+  const message=String(e?.message||'알 수 없는 오류');status.textContent=`DART 조회 실패: ${message}`;body.innerHTML=`<tr><td colspan="5">${escapeHtml(message)}</td></tr>`;$('dartFinancialChart').innerHTML='<div class="chart-empty">DART 정기 재무제표를 불러오지 못했습니다. 어닝 비교는 네이버 잠정실적 자료를 별도로 확인합니다.</div>';
+  dartFinancialDataCache=null;
+ }
+ const naverRows=await naverPromise;
+ if(current.code!==code)return;
+ dartNaverEarningsData=naverRows||[];
+ if(dartNaverEarningsData.length)dartNaverEarningsError='';
+ renderDartSurpriseAnalysis();
+}
+$('dartFinancialRefresh')?.addEventListener('click',loadDartFinancials);
