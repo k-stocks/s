@@ -1,6 +1,6 @@
 const API='https://m.stock.naver.com';
 const DESKTOP='https://stock.naver.com';
-const PROXY_BASE='https://kstocks.hundprint.workers.dev';
+const PROXY_BASE='https://stock-insight-proxy.mcraft-tiger-574.workers.dev';
 const seed=[{name:'삼성전자',code:'005930'},{name:'삼성전자우',code:'005935'},{name:'SK하이닉스',code:'000660'},{name:'한미반도체',code:'042700'},{name:'두산에너빌리티',code:'034020'},{name:'두산',code:'000150'},{name:'현대차',code:'005380'},{name:'기아',code:'000270'},{name:'LG에너지솔루션',code:'373220'},{name:'삼성SDI',code:'006400'},{name:'NAVER',code:'035420'},{name:'카카오',code:'035720'},{name:'제주반도체',code:'080220'},{name:'대원전선',code:'006340'},{name:'대덕전자',code:'353200'}];
 const $=id=>document.getElementById(id), blank='—';
 const FLOW_DATE_KEYS=['tradeDate','date','localDate','localTradedAt','bizdate','tradingDate','bizDate','trdDt','dt','basDt','yyyymmdd','tradeDateYmd','dateString','tradedAt','dealDate','stckBsopDate','ymd','businessDate','tradingDay','stck_bsop_date','bsopDate'];
@@ -701,6 +701,70 @@ function render(s){current={...current,...s};{const ex=num(s.foreignFloat);if(ex
 function normalize(item){const code=String(item.code||item.itemCode||item.stockCode||item.reutersCode||'').replace(/\D/g,'');return code?{name:item.name||item.stockName||item.itemName||code,code:code.padStart(6,'0')}:null}
 async function search(q){if(/^\d{6}$/.test(q))return[{name:seed.find(x=>x.code===q)?.name||q,code:q}];const d=await first([`${API}/front-api/search/autoComplete?query=${encodeURIComponent(q)}&target=stock,index,marketindicator,coin,ipo`]);const a=d?.result?.items||d?.items||d?.result||[];return(Array.isArray(a)?a:[]).map(normalize).filter(Boolean).slice(0,12)}
 function showResults(items,q,msg=''){const box=$('results');box.hidden=!q;if(msg){box.innerHTML=`<div class="result">${escapeHtml(msg)}</div>`;return}if(!items.length){box.innerHTML='<div class="result">검색 결과가 없습니다.</div>';return}box.innerHTML=items.map(x=>`<button class="result" data-code="${x.code}" data-name="${escapeHtml(x.name)}">${escapeHtml(x.name)}<small>${x.code}</small> ›</button>`).join('');box.querySelectorAll('[data-code]').forEach(b=>b.onclick=()=>load(b.dataset.code,b.dataset.name))}
+
+// 공유 URL에서 종목을 자동으로 찾아 기존 상세 화면으로 연결한다. 기존 검색/조회 흐름은 그대로 사용한다.
+function initialStockFromUrl(){
+ try{
+  const params=new URLSearchParams(location.search||'');
+  const aliases=new Set(['code','stockcode','itemcode','ticker','종목코드','url','naver','stockurl','stock','name','query','q','종목명','종목']);
+  let raw='';
+  // URLSearchParams로 일반/한글 파라미터를 우선 처리
+  for(const [key,value] of params.entries()){
+   let normalized=String(key||'').trim().toLowerCase();
+   try{normalized=decodeURIComponent(normalized.replace(/\+/g,'%20')).trim().toLowerCase()}catch{}
+   if(aliases.has(normalized)&&String(value||'').trim()){raw=String(value).trim();break}
+  }
+  // 일부 공유 서비스가 쿼리 문자열을 재인코딩한 경우를 위한 원문 보정
+  if(!raw){
+   const query=String(location.search||'').replace(/^\?/,'');
+   for(const part of query.split('&')){
+    if(!part)continue;
+    const split=part.indexOf('=');
+    if(split<0)continue;
+    let key=part.slice(0,split),value=part.slice(split+1);
+    for(let i=0;i<2;i++){
+     try{key=decodeURIComponent(key.replace(/\+/g,'%20'))}catch{}
+     try{value=decodeURIComponent(value.replace(/\+/g,'%20'))}catch{}
+    }
+    if(aliases.has(String(key).trim().toLowerCase())&&String(value).trim()){raw=String(value).trim();break}
+   }
+  }
+  if(!raw)return null;
+  let candidate=raw;
+  // 네이버 종목 URL 또는 URL 인코딩 문자열에서 6자리 종목코드 추출
+  for(let i=0;i<2;i++){try{candidate=decodeURIComponent(candidate)}catch{}}
+  if(/https?:|stock\.naver\.com|m\.stock\.naver\.com/i.test(candidate)){
+   try{
+    const u=new URL(candidate);
+    const fromQuery=u.searchParams.get('code')||u.searchParams.get('itemCode');
+    if(fromQuery&&/^\d{6}$/.test(fromQuery))return{code:fromQuery};
+    const match=u.pathname.match(/(?:domestic\/stock\/|item\/)(\d{6})/);
+    if(match)return{code:match[1]};
+   }catch{}
+   const match=candidate.match(/(?:code=|domestic(?:%2F|\/)stock(?:%2F|\/))(\d{6})/i);
+   if(match)return{code:match[1]};
+   return null;
+  }
+  candidate=candidate.trim();
+  if(/^\d{6}$/.test(candidate))return{code:candidate};
+  return candidate?{name:candidate}:null;
+ }catch{return null}
+}
+async function loadInitialStockFromUrl(){
+ const target=initialStockFromUrl();if(!target)return;
+ if(target.code){const known=seed.find(x=>x.code===target.code);$('query').value=known?.name||target.code;load(target.code,known?.name||target.code);return}
+ $('query').value=target.name;$('clear').hidden=false;
+ try{
+  const items=await search(target.name);
+  const exact=items.find(x=>String(x.name).trim().toLowerCase()===target.name.toLowerCase());
+  if(exact){load(exact.code,exact.name);return}
+  if(items.length===1){load(items[0].code,items[0].name);return}
+  showResults(items,target.name,items.length?'종목을 선택해 주세요.':'검색 결과가 없습니다.');
+ }catch{
+  const local=seed.filter(x=>x.name.toLowerCase()===target.name.toLowerCase()||x.name.toLowerCase().includes(target.name.toLowerCase()));
+  if(local.length===1)load(local[0].code,local[0].name);else showResults(local,target.name,local.length?'종목을 선택해 주세요.':'종목 검색에 실패했습니다. 종목명이나 코드를 확인해 주세요.');
+ }
+}
 async function load(code,name=''){dailyChartPeriod='day';chartRangeSel={...chartRangeDefault};dailyRowsStore.delete(code);foreignStore.delete(code);renderRangeTabs('day');$('dailyChartTitle').textContent='120일봉 차트';dailyChartCache.clear();loadInvestorTrend(code);dailyChartForeignDone.clear();dailyChartForeignInFlight.clear();document.querySelectorAll('.daily-chart-tabs button').forEach(b=>{b.classList.toggle('active',b.dataset.period==='day');b.setAttribute('aria-selected',String(b.dataset.period==='day'))});const id=++seq,known=seed.find(x=>x.code===code);current={code,name:name||known?.name||code};dartConsensusQuarters=[];dartFinancialDataCache=null;dartNaverEarningsData=null;renderDartSurpriseAnalysis();loadDartFinancials();const dartLink=$('dartLink');if(dartLink){const dartName=name||known?.name||code;dartLink.href=`https://dart.fss.or.kr/html/search/SearchCompanyIR3_M.html?textCrpNM=${encodeURIComponent(dartName)}`;dartLink.dataset.dartName=dartName;}updateFavoriteButton();$('name').textContent=current.name;$('code').textContent=code;$('change').textContent='데이터 조회 중…';$('status').textContent='네이버 증권 데이터 조회 중…';$('query').value=current.name;$('results').hidden=true;$('chart').innerHTML='<div class="chart-empty">분기 재무 데이터 조회 중…</div>';try{const flowKrxPromise=Promise.race([fetchFlowHistory(code,'KRX'),new Promise(resolve=>setTimeout(()=>resolve(null),2800))]);const flowNxtPromise=Promise.race([fetchFlowHistory(code,'NXT'),new Promise(resolve=>setTimeout(()=>resolve(null),2800))]);const floatSharesPromise=Promise.race([loadFloatingSharesFromCompany(code).catch(()=>null),new Promise(resolve=>setTimeout(()=>resolve(null),2200))]);const pricePromise=loadDailyPrices120(code,raw=>{if(id!==seq)return;renderDailyChart(raw,'day')});pricePromise.then(raw=>{if(id!==seq)return;dailyChartCache.set(code+'-day',raw);renderDailyChart(raw,'day');loadChartPeriod('day')}).catch(()=>{});const results=await Promise.allSettled([
 first([`${API}/api/stock/${code}/basic`]),
 first([`${API}/api/stock/${code}/integration`]),
