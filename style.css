@@ -272,7 +272,7 @@
 .dart-fundamental-table-wrap{overflow-x:auto;margin-top:12px}
 .dart-fundamental-table{width:100%;border-collapse:collapse;font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .dart-fundamental-table th,.dart-fundamental-table td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line,#e5e9ef)}
-.dart-fundamental-table th:first-child,.dart-fundamental-table td:first-child{text-align:left}
+.dart-fundamental-table th{text-align:center}.dart-fundamental-table td:first-child{text-align:center}
 .dart-fundamental-table th{color:var(--muted,#8490a3);background:var(--soft,#f7f8fa);font-weight:600}
 .dart-fundamental-table td.negative{color:#3979d8}
 @media(max-width:520px){.dart-fundamental-card{padding:13px}.dart-fundamental-head h3{font-size:15px}.dart-fundamental-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.dart-fundamental-metric b{font-size:13px}.dart-fundamental-chart-grid{gap:7px}.dart-fundamental-chart-card{padding:8px}.dart-line-chart svg{height:105px}.dart-period-switch button{padding:7px 8px;font-size:10px}.dart-fundamental-table{font-size:9px}}
@@ -336,5 +336,40 @@
 /* V47: PC 최근 6분기 영업이익 그래프만 가로폭 축소 (모바일 유지) */
 @media(min-width:601px){
  .chart-scroll{width:50%;margin-left:auto;margin-right:auto}
- .labels{width:50%;margin-left:auto;margin-right:auto}
+ /* 음수 분기에서 SVG 내부 기간 라벨 대신 외부 .labels를 사용할 때도
+    차트와 동일한 폭을 유지해 6개 기간이 각 막대 아래에 정렬되도록 한다. */
+ .labels{width:100%;margin-left:0;margin-right:0}
 }
+
+
+/* 상단 요약 지표 사이의 주당지표·가치 분석 펼침 영역 */
+.dart-per-share-details{margin:8px 0 10px;padding:0;overflow:hidden}
+.dart-per-share-details>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;gap:8px;min-height:42px;padding:11px 38px;font-size:13px;font-weight:800;color:var(--text,#182230);text-align:center;user-select:none}
+.dart-per-share-details>summary::-webkit-details-marker{display:none}
+.dart-per-share-arrow{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:16px;line-height:1;color:var(--muted,#8490a3);transition:transform .18s ease}
+.dart-per-share-details[open] .dart-per-share-arrow{transform:translateY(-50%) rotate(180deg)}
+.dart-per-share-details>.dart-fundamental-section,.dart-per-share-details>.dart-fundamental-data-tables{padding:0 12px 12px;margin-top:0}
+.dart-per-share-details .dart-fundamental-data-tables{margin-top:4px}
+@media(max-width:520px){.dart-per-share-details>summary{min-height:40px;padding:10px 12px;font-size:12px}.dart-per-share-details>.dart-fundamental-section,.dart-per-share-details>.dart-fundamental-data-tables{padding-left:9px;padding-right:9px}}
+
+/* V65: 주당지표는 DART 분석과 분리된 네이버 투자지표 영역 */
+.dart-per-share-content{padding:0 12px 12px}
+.dart-per-share-period-switch{margin:0 0 12px}
+.dart-per-share-status{margin:8px 2px 0;color:var(--muted,#8490a3);font-size:11px;text-align:right}
+@media(max-width:520px){.dart-per-share-content{padding-left:9px;padding-right:9px}}
+
+/* V74: 주당지표 기간 선택 영역은 버튼 폭에 맞추고 불필요한 회색 여백 제거 */
+.dart-per-share-period-switch{display:inline-flex!important;width:max-content;max-width:100%;flex:0 0 auto;align-self:flex-start;}
+.dart-per-share-period-switch button{flex:0 0 auto;white-space:nowrap;}
+/* V74: 그래프 범례를 개별 표시/숨김 토글로 사용 */
+.dart-line-legend .dart-series-toggle{appearance:none;border:0;background:transparent;color:inherit;display:inline-flex;align-items:center;gap:6px;padding:3px 2px;margin:0;font:inherit;cursor:pointer;border-radius:5px}
+.dart-line-legend .dart-series-toggle.is-off{opacity:.32;text-decoration:line-through}
+.dart-line-legend .dart-series-toggle:focus-visible{outline:2px solid var(--accent,#5276a3);outline-offset:2px}
+
+/* V77: DART 최신 분기 핵심 지표를 의미별로 구분 */
+.dart-fundamental-metrics{display:block}
+.dart-fundamental-metric-group{margin:12px 0 16px}
+.dart-fundamental-metric-group>h5{margin:0 0 7px;font-size:11px;font-weight:800;color:var(--muted,#8490a3)}
+.dart-fundamental-metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+@media(max-width:520px){.dart-fundamental-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.dart-fundamental-metric-group{margin:10px 0 14px}}
+.dart-fundamental-metrics-period{margin:10px 0 4px;font-size:11px;font-weight:800;color:var(--text,#182230)}
