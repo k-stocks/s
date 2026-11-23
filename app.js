@@ -1,6 +1,6 @@
 const API='https://m.stock.naver.com';
 const DESKTOP='https://stock.naver.com';
-const PROXY_BASE='https://kstocks.hundprint.workers.dev';
+const PROXY_BASE='https://stock-insight-proxy.mcraft-tiger-574.workers.dev';
 const seed=[{name:'삼성전자',code:'005930'},{name:'삼성전자우',code:'005935'},{name:'SK하이닉스',code:'000660'},{name:'한미반도체',code:'042700'},{name:'두산에너빌리티',code:'034020'},{name:'두산',code:'000150'},{name:'현대차',code:'005380'},{name:'기아',code:'000270'},{name:'LG에너지솔루션',code:'373220'},{name:'삼성SDI',code:'006400'},{name:'NAVER',code:'035420'},{name:'카카오',code:'035720'},{name:'제주반도체',code:'080220'},{name:'대원전선',code:'006340'},{name:'대덕전자',code:'353200'}];
 const $=id=>document.getElementById(id), blank='—';
 const FLOW_DATE_KEYS=['tradeDate','date','localDate','localTradedAt','bizdate','tradingDate','bizDate','trdDt','dt','basDt','yyyymmdd','tradeDateYmd','dateString','tradedAt','dealDate','stckBsopDate','ymd','businessDate','tradingDay','stck_bsop_date','bsopDate'];
@@ -945,8 +945,18 @@ const applyQuickFinancialView=()=>{
   const annualParsedProfit=annualParsed.quarters.find(x=>!x.est&&!/\(E\)/i.test(x.label)&&Number((String(x.label||'')+' '+String(x.key||'')).match(/20\d{2}/)?.[0])===previousYear&&x.profit!==null)?.profit??null;
   const annualOp=quickAnnualRaw?.annualProfitFallback??annualOperatingProfit(quickAnnualRaw,allQ)??annualParsedProfit??annualOperatingProfit(quickIntegrationRaw,allQ)??annualProfitFromCompleteQuarters(allQ);
   if(annualOp!==null)setQuickMetric('annualOp',`${annualOp.toLocaleString('ko-KR',{maximumFractionDigits:1})}억`);
-  // 멀티플과 적정 주가는 임시 재무 응답으로 계산하지 않는다.
-  // 기본정보·분기·연간 자료가 모두 수집된 최종 render()에서만 확정한다.
+  // 재무 자료가 도착하는 즉시 최종 화면과 동일한 원본/분기 선택 기준으로 멀티플을 계산한다.
+  // 통합 cnsPer(컨센서스 PER)를 임시 영업이익 멀티플로 사용하지 않아 초기값 변경을 방지한다.
+  const marketCapEok=capToEok(metric(quickIntegrationRaw||{},['marketValue','marketCap','marketSum','marketCapitalization','시가총액']));
+  const actualLast4=actualQ.slice(-4),quickTtmOp=actualLast4.length===4&&actualLast4.every(x=>x.profit!==null)?actualLast4.reduce((sum,x)=>sum+x.profit,0):null;
+  const expectedLast4=allQ.filter(x=>x.profit!==null).slice(-4),quickEstTtmOp=expectedLast4.length===4?expectedLast4.reduce((sum,x)=>sum+x.profit,0):null;
+  if(marketCapEok!==null){
+   if(annualOp!==null&&annualOp!==0)setQuickMetric('annualMultiple',fmt(marketCapEok/annualOp,'배'));
+   if(quickTtmOp!==null&&quickTtmOp!==0)setQuickMetric('ttmMultiple',fmt(marketCapEok/quickTtmOp,'배'));
+   if(quickEstTtmOp!==null&&quickEstTtmOp!==0)setQuickMetric('estTtmMultiple',fmt(marketCapEok/quickEstTtmOp,'배'));
+   updateFairPricesFromVisibleMetrics();
+  }
+
 };
 // 현재가·기본정보는 기본 API 두 건만 도착하면 먼저 표시하고, 재무·수급·차트 보조자료는 뒤에서 합칩니다.
 const coreResult=await Promise.allSettled([basicPromise]);
@@ -958,7 +968,7 @@ integrationPromise.then(integration=>{
   if(id!==seq||!integration)return;
   quickIntegrationRaw=integration;applyQuickFinancialView();
   const partial=extractBasic({},integration,{}, {},code,current.name);
-  for(const key of ['per','pbr','eps','cap','foreignFloat','estTtmMultiple','target','opinion']){
+  for(const key of ['per','pbr','eps','cap','foreignFloat','target','opinion']){
     const node=$(key),value=partial[key];
     if(!node||value===undefined||value===null||value===blank||value==='')continue;
     node.textContent=value;
